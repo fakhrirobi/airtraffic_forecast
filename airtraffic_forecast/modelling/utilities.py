@@ -7,8 +7,6 @@ import os # for temporary path changer
 import pandas as pd 
 
 
-#function to change os temporary using contextmanager
-function to change path whenever loading timeseries data
 @contextmanager
 def data_load_path(path:str)->None : 
     """ function to change path whenever loading timeseries data
@@ -29,7 +27,7 @@ def data_load_path(path:str)->None :
         os.chdir(prev_cwd) 
         
 @contextmanager
-def save_model_path(path='model_output') : 
+def save_model_path(path='model_output')->None: 
     """path changer whenever saving the model 
 
     Args:
@@ -44,7 +42,7 @@ def save_model_path(path='model_output') :
         os.chdir(prev_cwd)   
         
 @contextmanager
-def load_model_performance_path(path='model_performance') : 
+def load_model_performance_path(path='model_performance')->None : 
     """path changer whenever loading the performance of each timeseries method : statistical, ml, NN 
     to create report 
 
@@ -60,7 +58,7 @@ def load_model_performance_path(path='model_performance') :
         os.chdir(prev_cwd)          
         
 @contextmanager
-def save_figure_path(path='model_performance') : 
+def save_figure_path(path='model_performance')->None : 
     """ path changer for saving the plotly figure 
 
     Args:
@@ -100,7 +98,7 @@ def stationary_test(data : pd.DataFrame,ts : str ,alpha_threshold: float=0.05)->
     if result[1] > alpha_threshold : 
         print('The Data Is Non Stationary') 
         return False
-    else : 
+    elif result[1] <= alpha_threshold  : 
         print('The Data Is Stationary')
         return True
 
@@ -108,7 +106,8 @@ def stationary_test(data : pd.DataFrame,ts : str ,alpha_threshold: float=0.05)->
 
 
 
-def transform_data(data : pd.DataFrame,ts:string:'Total Passenger')->pd.DataFrame :
+def transform_data(data : pd.DataFrame,ts:str='Total Passenger')->pd.DataFrame :
+    
     """set of transformation function to make the dataset stationary, 
     
 
@@ -156,9 +155,10 @@ def transform_data(data : pd.DataFrame,ts:string:'Total Passenger')->pd.DataFram
     #rolling sqrt 
     data['moving_avg_sqrt'] = data['sqrt_ts'].rolling(window = 12,
                                                                    center = False).mean()
-    data['diff_sqrt_moving_avg'] = data['sqrt_ts']-data['moving_avg_sqrt']
+    data['diff_sqrt_moving_avg'] = data['sqrt_ts']- data['moving_avg_sqrt']
     #removing NaN
-    data = data.dropna()
+    data.dropna(inplace=True)
+    
     return data
 
 
