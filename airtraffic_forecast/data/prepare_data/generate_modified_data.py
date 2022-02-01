@@ -49,7 +49,7 @@ def begin_process() :
     print(forecast_data.head(4))
     #save to ready_to_process_data folder
     with change_path('ready_to_process_data') : 
-        forecast_data.to_csv('forecast_data.csv',index=True)
+        forecast_data.to_csv('forecast_data.csv',index=False)
     #update progress    
     pbar.update(n=50)
     print('\n Successfully created prepare_for_eda.csv and forecast_data.csv')
