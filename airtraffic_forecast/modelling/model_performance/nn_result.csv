@@ -1,0 +1,2 @@
+model_name,RMSE Score,MAE Score,MAPE Score
+NeuralProphet_hidden_layer3_epoch_3_weekly_seasonality12,4295517744.826521,52562.38878487524,0.016044439180116943
