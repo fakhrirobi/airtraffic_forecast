@@ -1,16 +1,17 @@
-import itertools
+#inside forecast_model_statistical.py 
+#importing all required packages 
+import itertools # for hyperparameter finding for order of ARMA component ( p and q )
 
-
+#common operations
 import numpy as np 
 import pandas as pd
 import os
-import warnings
-warnings.filterwarnings("ignore")
 
 
 
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from contextlib import contextmanager
+
+from statsmodels.tsa.statespace.sarimax import SARIMAX # SARIMAX Model 
+from contextlib import contextmanager # for path changer
 from datetime import datetime
 
 
@@ -26,47 +27,75 @@ def path_changer(path='model_output') :
         yield 
     finally : 
         os.chdir(current_wd)
+        
 class SarimaxModel : 
-    #//TODO : add list of default parameter 
-    def __init__(self) : 
-        pass 
+    """
+    SarimaxModel Class the purpose of creating this class instead of direct implementation using statsmodels is to provide 
+    time series crossvalidation 
+    """
     
-    def train_model(self,data,ts,save_model=False,custom_name=None,p=1,d=0,q=1,P=1,D=0,Q=1,s=12)->None : 
-        #//TODO : refer to init some variables 
+    def train_model(self,data : pd.DataFrame,ts:str,save_model: bool=False,custom_name=None,p=1,d=0,q=1,P=1,D=0,Q=1,s=12)->None : 
+        """ train the SARIMAX model 
+
+        Args:
+            data (pd.DataFrame): timeseries data for training 
+            ts (str): [description] : feature name  / columns of training dataset -> because there are no single ts (due to transformation)
+            save_model (bool, optional): if True model will be saved to .pkl format  Defaults to False.
+            custom_name ([type], optional): [description]. Defaults to None.
+            p (int, optional): AR order. Defaults to 1.
+            d (int, optional): Differencing order. Defaults to 0.
+            q (int, optional): MA order. Defaults to 1.
+            P (int, optional): Seasonal AR order . Defaults to 1.
+            D (int, optional): Seasonal differencing order. Defaults to 0.
+            Q (int, optional): Seasonal MA order. Defaults to 1.
+            s (int, optional): Seasonality . Defaults to 12.
+
+        Returns:
+            [pd.DataFrame]: recap of the model result 
+        """
+       
         data_ = data.copy()
+        #drop period columns
         data_.drop('Period',axis=1,inplace=True)
         data_ = data_[[ts]]
+        #init the TEST and TRAIN length for cross validation 
         TEST_LENGTH = 29 
         TRAIN_LENGTH = 100 
+        #empty list as container of each crossval 
         rmse_compiled = []
         mae_compiled = []
         mape_compiled = []
-        for i in range(1,TEST_LENGTH) : 
+        for i in range(0,TEST_LENGTH) : 
+            #change indexing for each fold 
             TRAIN_DATA = data_.loc[:TRAIN_LENGTH,:]
             TEST_DATA = data_.loc[TRAIN_LENGTH:,:]
             
             model = SARIMAX(TRAIN_DATA, order=(p,d,q),
                             seasonal_order=(P,D,Q,s),initialization='approximate_diffuse')
-            #changing package from statsmodels to sktime 
+            #fitting on different index for each crossval 
             fitted_model = model.fit()
+            # forecast on test length 
             predicted_values = fitted_model.forecast(steps=TEST_LENGTH)
-            rmse_,mae_,mape_ = get_metrics(ytrue=TEST_DATA,yhat=predicted_values,json_output=False)
+            #return metrics from metrics.py 
+            rmse_,mae_,mape_ = get_metrics(ytrue=TEST_DATA,yhat=predicted_values,dict_output=False)
             # append all the result 
             rmse_compiled.append(rmse_)
             mae_compiled.append(mae_)
             mape_compiled.append(mape_)
-            TRAIN_LENGTH +=1
+            #increment train while decreasing the test length 
+            TRAIN_LENGTH += 1
             TEST_LENGTH -= 1
             
-    
+        #for model saving 
         model_name_format = f'SARIMA_{p},{d},{q}_{P},{D},{Q},{s}_{ts}'
         model_performance = {
             'RMSE Score' : np.mean(rmse_compiled) , 
             'MAE Score' : np.mean(mae_compiled) , 
             'MAPE Score' : np.mean(mape_compiled)
         }
-        
+        #adding model name 
         model_performance['model_name'] = model_name_format
+        #conver
         model_performance_df = pd.DataFrame(model_performance,index=[0])
         
 
@@ -74,10 +103,11 @@ class SarimaxModel :
         if save_model : 
             
             filename_format = f'SARIMA_{p},{d},{q}_{P},{D},{Q},{s}__{ts}.pkl'
-            data_train = data.copy()
-            
+            data_train = data.copy(deep=True)
+            #setting index for datetime feature
             data_train.set_index('Period',inplace=True)
             data_train = data_train[[ts]]
+            #fitting the model again for model save 
             model = SARIMAX(data_train, order=(p,d,q),
                             seasonal_order=(P,D,Q,s),initialization='approximate_diffuse')
             model_fit = model.fit()
@@ -87,50 +117,8 @@ class SarimaxModel :
         return model_performance_df
     
     
-    def bic_selection_optimal(self,ts_train)-> pd.DataFrame(): 
-        # from the model above on SARIMA we are going to use the moving avg sqrt 
-        p_min = 0
-        d_min = 0
-        q_min = 0
-        p_max = 10
-        d_max = 0
-        q_max = 10
-
-        # Initialize a DataFrame to store the results
-        results_bic = pd.DataFrame(index=['AR{}'.format(i) for i in range(p_min,p_max+1)],
-                                columns=['MA{}'.format(i) for i in range(q_min,q_max+1)])
-
-        for p,d,q in itertools.product(range(p_min,p_max+1),
-                                    range(d_min,d_max+1),
-                                    range(q_min,q_max+1)):
-            if p==0 and d==0 and q==0:
-                results_bic.loc['AR{}'.format(p), 'MA{}'.format(q)] = np.nan
-                continue
-
-            try:
-                model = SARIMAX(ts_train, order=(p, d, q),
-                                    #enforce_stationarity=False,
-                                    #enforce_invertibility=False,
-                                    )
-                results = model.fit()
-                results_bic.loc['AR{}'.format(p), 'MA{}'.format(q)] = results.bic
-            except:
-                continue
-        results_bic = results_bic[results_bic.columns].astype(float)
-        return results_bic
-
-
-# model finding
 
 
 
-
-
-
-
-# class HoltWinterModel : 
-#     def __init__(self) -> None:
-#         pass
-        
         
     

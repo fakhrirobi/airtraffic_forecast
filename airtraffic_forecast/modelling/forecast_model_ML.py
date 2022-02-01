@@ -1,19 +1,20 @@
-from copyreg import pickle
+#inside forecast_model_ML.py
+#importing all required packages
+
+#basic packages
 import pandas as pd 
 import numpy as np
 import os 
-# TODO : implement pydantic modelling 
 
 
-#preparing the data 
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, MaxAbsScaler, RobustScaler
-from sklearn import ensemble,linear_model
-from tqdm import tqdm
-from metrics import get_metrics
-from utilities import save_model_path
-import joblib, pickle
-from tqdm import tqdm 
-from math import ceil
+
+
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, MaxAbsScaler, RobustScaler #for scaler 
+from tqdm import tqdm # for progress monitoring 
+from metrics import get_metrics # relative import from metrics.py 
+from utilities import save_model_path # relative import from utilities.py
+import joblib, pickle # for saving model by pickling / joblib
+from math import ceil #
 
 
 
@@ -54,11 +55,11 @@ class MLForecastingModel() :
 
     
     def generate_feature(self,data,ts,lag_num) : 
-        """[summary]
+        """ function to prepare feature such as lag,month, year ( further for cyclical feature )
 
         Args:
-            data ([pd.Dataframe,pd.Series,np.array]): data for timeseries forecasting
-            ts ([str]): [description]
+            data ([pd.Dataframe,pd.Series]): data for timeseries forecasting
+            ts ([str]): name of ts feature to be forecasted
             lag_num ([int]): number of lag for creating feature 
 
         Returns:
@@ -73,12 +74,12 @@ class MLForecastingModel() :
         
         return data 
 
-    def create_cyclical_feature(self,data, col_name, period, start_num=0):
-        """[summary]
+    def create_cyclical_feature(self,data:pd.DataFrame, col_name: str, period:int, start_num:int=0)->pd.DataFrame:
+        """ function to create cyclical feature 
 
         Args:
-            data ([pd.Dataframe]): [description]
-            col_name ([str]): [description]
+            data ([pd.Dataframe,pd.Series]): data for timeseries forecasting
+            col_name ([str]): col name (month/year)
             period ([int]): Month / Annual Period number 
             start_num (int, optional): count start on each period. Defaults to 0.
 
@@ -92,10 +93,10 @@ class MLForecastingModel() :
         return data.assign(**kwargs).drop(columns=[col_name])
 
     def start_prepare_data(self,data,ts='Total Passenger',lag_num=129) :
-        """[summary]
+        """ wrapping all the data preparation step 
 
         Args:
-            data ([type]): [description]
+            data ([type]): data for timeseries forecasting
             ts (str, optional): [description]. Defaults to 'Total Passenger'.
             lag_num (int, optional): [description]. Defaults to 129.
 
@@ -108,22 +109,22 @@ class MLForecastingModel() :
         data_year_cylical  = self.create_cyclical_feature(data=data_month_cyclical,col_name='year',period=1,start_num=2005)
         #drop the period column = 
         final_data = data_year_cylical.drop('Period',axis=1)
-        
+        #splitting the dataset into X, y due to supervised approach 
         X,y  = self.train_test_split(data=final_data,target_col='Total Passenger')
         
         
         return X,y  
     
     def train_test_split(self,data,target_col,split=False) : 
-        """[summary]
+        """ split the dataset into X, y 
 
         Args:
-            data ([type]): [description]
-            target_col ([type]): [description]
-            split (bool, optional): [description]. Defaults to False.
+            data ([type]): data for timeseries forecasting
+            target_col ([type]): target name (y )
+            split (bool, optional): Defaults to False.
 
         Returns:
-            [type]: [description]
+            [np.array]: X, y (feature and target )
         """
 
         scaler = self.get_scaler('minmax')
@@ -142,63 +143,81 @@ class MLForecastingModel() :
                            linear_model.SGDRegressor(),linear_model.TweedieRegressor()]
 
         Args:
-            X ([pd.Series , pd.Dataframe]): 
-            y ([pd.Series , pd.Dataframe]): 
+            X ([pd.Series , pd.Dataframe]): feature
+            y ([pd.Series , pd.Dataframe]): target 
             save_model (bool, optional): if True each of the model would be saved to MODEL_OUTPUT_PATH . Defaults to True.
 
         Returns:
             [pd.Dataframe]: compiled result of listed models performance 
         """
+        #import all model candidate 
         from sklearn import ensemble, linear_model,svm,neighbors
         from xgboost import XGBRegressor 
-
+        #creating collection of model
         list_of_models =  {"RandomForestRegressor":ensemble.RandomForestRegressor(),"XGBRegressor" :  XGBRegressor(),"SVRegressor" : svm.SVR(),
                            "KNeighborsRegressor":neighbors.KNeighborsRegressor(),"LinearRegression":linear_model.LinearRegression(),
                            "PassiveAggressiveRegressor":linear_model.PassiveAggressiveRegressor()
                            }
-
+        #empty list as container
         list_of_model_result = []
+        #initializing the progress bar
         pbar = tqdm(total=100)
+        #looping over model candidate 
         for model_name in list_of_models.keys() : 
+            #creating empty list of metrics for each model 
             rmse_compiled = []
             mae_compiled = []
             mape_compiled = []
+            #setting the TRAIN and TEST LENGTH for crossvalidation 
             TRAIN_LENGTH = 100 
             TEST_LENGTH = 29 
+            #accessing the dict of model to get str of model name 
             model = list_of_models.get(model_name)
             for i in range(TEST_LENGTH) : 
-                
+                #creating train and validation set 
                 X_TRAIN,X_VALID = X[:TRAIN_LENGTH], X[TRAIN_LENGTH:]
                 Y_TRAIN,Y_VALID =  y[:TRAIN_LENGTH], y[TRAIN_LENGTH:]
+                #fitting model 
                 model.fit(X_TRAIN,Y_TRAIN)
+                #making inference 
                 y_hat = model.predict(X_VALID)
-                
-                rmse_,mae_,mape_ = get_metrics(ytrue=Y_VALID,yhat=y_hat,json_output=False)
+                #get metrics
+                rmse_,mae_,mape_ = get_metrics(ytrue=Y_VALID,yhat=y_hat,dict_output=False)
                 # append all the result 
                 rmse_compiled.append(rmse_)
                 mae_compiled.append(mae_)
                 mape_compiled.append(mape_)
+                #increment train length and test length 
                 TRAIN_LENGTH +=1
                 TEST_LENGTH -= 1 
-    
+            #model name 
             model_name_format = f'{model_name}'
+            #creating model performance dictionary 
             model_performance = {
                 'RMSE Score' : np.mean(rmse_compiled) , 
                 'MAE Score' : np.mean(mae_compiled) , 
                 'MAPE Score' : np.mean(mape_compiled)
             }
+            #adding model name 
             model_performance['model_name'] = model_name_format
+            #creating dataframe of model performance 
             model_performance_df = pd.DataFrame(model_performance,index=[0])
+            #appending each df to list for concat 
             list_of_model_result.append(model_performance_df)
+            #fitting the model if we want to savee the model 
             if save_model : 
                 model.fit(X,y)
+                #change the path for saving the model 
                 with save_model_path() : 
                     try : 
                         pickle.dump(model,f'{model_name_format}.pkl')
                     except TypeError : 
                         joblib.dump(model,f'{model_name_format}.pkl')
-            pbar.update(math.ceil(100/len(list_of_models)))
+            #update progress for each loop / model 
+            pbar.update(ceil(100/len(list_of_models)))
+        #compiling all model result as dataframe 
         compiled_result_model = pd.concat(list_of_model_result,axis=0)
+        
         return compiled_result_model
 
     
