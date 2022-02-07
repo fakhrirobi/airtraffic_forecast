@@ -29,7 +29,7 @@ This Project was created to aim these following objectives :
 
    
 - Time Series Model Development 
-    1. statsmodels -> forecasting model 
+    1. Statsmodels 
     2. Pandas 
     3. Numpy
     4. Neural Prophet 
@@ -43,7 +43,7 @@ This Project was created to aim these following objectives :
     2. Statistical Model like VAR 
     3. Statspace Models : Kalman Filter, Hidden Markov Model 
 
-=
+
 
 #### :hammer: INSTALLATION 
 ---
@@ -51,11 +51,12 @@ This Project was created to aim these following objectives :
 ```python
 #clone the repository first 
     git clone https://github.com/fakhrirobi/airtraffic_forecast.git
+
 ```
-2. Install the dependency 
+2. change directory 
 ```python
 #change directory 
-    pip install -r requirements.txt
+    pip install . 
 
 ```
 3. Data Preparation 
